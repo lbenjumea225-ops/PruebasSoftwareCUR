@@ -106,38 +106,103 @@ Una ctualización inmediata de Entra ID y deshabilitación de APIs heredadas con
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-# Caso 1 — Credenciales comprometidas / alcance del incidente
+# Vulnerabilidades comunes en sistemas de login — detección y mitigación
 
-Qué usar del documento:
+Aquí tienes una lista concisa y accionable de las vulnerabilidades de autenticación/gestión de sesión que suelen hallarse en pruebas de seguridad (pentests, SAST/DAST, red team), cómo se detectan y qué medidas aplicar.
 
-Sección “Credenciales comprometidas — magnitud y cómo medirla”: métricas (nº de cuentas comprometidas, tasa de reuse), fuentes (Have I Been Pwned, feeds OSINT) y cómo obtener datos.
+**Fuerza bruta / credential stuffing**
 
-Métricas sugeridas (Tasa de cuentas comprometidas, % con MFA, coste de cracking).
-Qué te aporta: metodología para cuantificar el tamaño del incidente y priorizar cuentas a remediar.
+Qué es: Intentos automáticos masivos para adivinar credenciales.
+Cómo detectarlo: Pruebas automatizadas con herramientas (Hydra, Burp Intruder), observación de intentos repetidos desde una IP/rango. Logs muestran muchos fallos seguidos.
+Impacto: Acceso no autorizado a cuentas.
+Mitigaciones: bloqueo temporal después de N intentos, backoff exponencial, CAPTCHA, MFA, detección de IPs/ratelimit, monitoring y alertas.
 
-# Caso 2 — Métodos de ataque usados / vectorización
+**Almacenamiento de contraseñas inseguro**
 
-Qué usar:
+Qué es: Hashing débil o contraseñas en texto plano.
+Cómo detectarlo: Revisión de código/DB dump en pruebas (SAST, revisión manual). Verificar algoritmo (MD5/SHA1 = malo).
+Impacto: Compromiso masivo si se filtra la BD.
+Mitigaciones: Argon2/Bcrypt/PBKDF2 con salt único por usuario; políticas de rotación/longitud mínima; no almacenar hints en texto.
 
-Sección “Métodos de ataque comunes”: credential stuffing, brute-force/password spraying, phishing/infostealers, session hijacking, explotación de flujos de reset, etc.
+**Secuestro de sesión (session hijacking / fixation)**
 
-Pruebas asociadas en “Pruebas de autenticación” (simulación de stuffing, pruebas de fuerza bruta, análisis de recuperación de contraseña).
-Qué te aporta: identificación de cómo pudieron haber comprometido las cuentas y pruebas reproducibles para demostrar la técnica usada.
+Qué es: Robo o reutilización de cookies/tokens de sesión.
+Cómo detectarlo: Pruebas con reproducción de cookies, manipulación de tokens, testing de fijación (establecer id de sesión antes de login) y comprobar expiración/cambio post-login.
+Impacto: Acceso con sesiones válidas de otros usuarios.
+Mitigaciones: regenerar ID de sesión al autenticar, usar cookies con HttpOnly, Secure, SameSite=strict/lax, expiración corta e inactividad, token signing (JWT con expiración y revocación), controles de IP/UA opcionales.
 
-# Caso 3 — Controles y mitigaciones / buenas prácticas y verificación
+**Tokens predecibles o sin expiración (JWT mal configurados)**
 
-Qué usar:
+Qué es: Tokens con baja entropía o sin verificación/expiración.
+Cómo detectarlo: Inspección de token (estructura), pruebas de reuso, análisis de firma/verificación.
+Impacto: Falsificación/uso indefinido de sesión.
+Mitigaciones: Firmar tokens con claves seguras, expiración (exp), revocación/blacklist, no incluir datos sensibles en JWT.
 
-Mejores prácticas (hashing/salting/pepper, elección de Argon2/bcrypt, parámetros, MFA recomendado, cookies seguras, TLS).
+**Cross-Site Request Forgery (CSRF) en endpoints de sesión**
 
-Pruebas de autenticación y autorización: checklist detallado para verificar que los controles están implementados y resistentes (regeneración de sesión, flags de cookie, test de IDOR, tokens, revocación, etc.).
-Qué te aporta: acciones correctivas concretas (qué cambiar) y cómo verificar que la mitigación funciona (qué pruebas pasar antes de producción).
-      
-    
+Qué es: Peticiones autenticadas iniciadas desde otro origen.
+Cómo detectarlo: Verificar ausencia de token CSRF en formularios sensibles; usar scanners que intentan POSTs CSRF.
+Impacto: Acciones no deseadas en cuentas de usuarios autenticados.
+Mitigaciones: Token CSRF sincronizado, SameSite cookies, verificar Origin/Referer en requests sensibles.
+
+**Redirecciones abiertas / Insecure direct object references (IDOR) relacionadas con login/recuperación**
+
+Qué es: Permitir acceder documentos/recursos cambiando parámetros. Redirecciones post-login a URLs externas.
+Cómo detectarlo: Pruebas manuales y automatizadas modificando IDs y parámetros next/redirect.
+Impacto: Acceso a datos de otros usuarios, phishing por redirect.
+Mitigaciones: Validar y permitir solo redirecciones internas; comprobar autorización en cada recurso; usar referencias indirectas.
+
+**Recuperación de contraseña insegura**
+
+Qué es: Envío de contraseña en texto plano, preguntas débiles, tokens reutilizables.
+Cómo detectarlo: Revisar flujo de “forgot password”: contenido del correo, token duración, posibilidad de adivinar token.
+Impacto: Toma de control de cuentas.
+Mitigaciones: Enviar enlaces con token de un solo uso y corta validez, no revelar si el email existe (mensajes genéricos), exigir MFA para cambios críticos.
+
+**Exhaustión de sesión / logout incompleto**
+
+Qué es: Sesiones no invalidan en logout o tras caducidad.
+Cómo detectarlo: Reusar cookie/tokens tras logout; comprobar endpoints de logout.
+Impacto: Acceso posterior con token inválido aparente.
+Mitigaciones: Invalidar token server-side, limpiar cookies, revocar tokens y rotar secretos cuando corresponda.
+
+**Autenticación por fuerza de terceros / OAuth mal configurado**
+
+Qué es: Flujos OAuth/OpenID Connect mal validados (redirect_uri no restringida, token leaks).
+Cómo detectarlo: Probar redirections, interceptar tokens en flujo, revisar configuración del proveedor.
+Impacto: Account takeover, phishing.
+Mitigaciones: Validar redirect_uri exacta, usar PKCE en apps públicas, validar state, scopes mínimos.
+
+**Exposición de mensajes de error sensibles**
+
+Qué es: Responder con mensajes que confirman existencia de usuarios o stack traces.
+Cómo detectarlo: Revisar respuestas HTTP en login/registro/forgot (404 vs 200 diferenciado).
+Impacto: Permite enumeración de usuarios y facilita ataques posteriores.
+Mitigaciones: Mensajes genéricos (“Credenciales inválidas”), no mostrar stack traces en producción.
+
+# Checklist rápido para pruebas (prioridad alta)
+
+-Bloqueo/rate-limit tras N intentos; probar con Burp Intruder/Hydra.
+-Regeneración de sesión tras login; comprobar fijación.
+-Cookies con HttpOnly, Secure, SameSite.
+-Tokens con expiración y revocación.
+-Flujo “forgot password” con token de un solo uso y expiración corta.
+-MFA habilitado/opcional — probar bypass.
+-Revisar logs y alertas: detectar patrones de brute force y cred stuffing.
+-No exponer si usuario existe.
+-Revisar OAuth redirect_uri y state/PKCE.
+-Pruebas CSRF en acciones sensibles.
+-Herramientas útiles (para pruebas)
+-Burp Suite (Intruder, Repeater), OWASP ZAP — pruebas proxy/DAST.
+-Hydra/Medusa — fuerza bruta/credential stuffing.
+-Nikto, nmap — detección de surface.
+-Revisiones manuales + SAST (dependiendo del lenguaje).
+
 # reflexion personal
 Durante el desarrollo de esta investigación sobre fallos en sistemas de login y autenticación, me di cuenta de la enorme responsabilidad que implica diseñar e implementar mecanismos de seguridad en cualquier sistema informático. Al principio pensaba que los ataques a plataformas grandes como LinkedIn o Microsoft eran situaciones lejanas, pero al analizar cada caso comprendí que muchos de esos errores pudieron haberse evitado con prácticas básicas de protección de contraseñas y control de accesos.
 El caso de Fortinet me llamó especialmente la atención, porque muestra cómo un simple descuido en la validación de rutas administrativas puede abrir la puerta a atacantes con acceso total. En el caso de LinkedIn, me impactó saber que millones de contraseñas se filtraron solo por usar un algoritmo inseguro. Y el caso de Microsoft demuestra que incluso las empresas más grandes pueden tener vulnerabilidades si no actualizan sus sistemas de autenticación de manera constante.
 Esta investigación me ayudó a entender que la seguridad no depende solo de las herramientas, sino también de la forma en que se aplican y mantienen. Aprendí que siempre se deben realizar pruebas antes de lanzar un sistema, usar técnicas modernas de cifrado y reforzar la autenticación con métodos adicionales como el MFA. En conclusión, este trabajo me hizo más consciente de la importancia de desarrollar software seguro y de asumir la seguridad como una parte esencial del proceso, no como un paso final.
+
 
 
 
