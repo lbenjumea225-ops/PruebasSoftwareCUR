@@ -211,8 +211,10 @@ Mitigaciones: Mensajes genéricos (“Credenciales inválidas”), no mostrar st
 -Nikto, nmap — detección de surface.
 
 -Revisiones manuales + SAST (dependiendo del lenguaje).
+## ¿Qué pruebas específicas debe pasar un sistema de autenticación
+ antes de produccion?
 
-# 🔒 1. Pruebas funcionales básicas
+# 🔒 Pruebas funcionales básicas
 
 | Prueba                             | Descripción                                                | Resultado esperado                                  |
 | ---------------------------------- | ---------------------------------------------------------- | --------------------------------------------------- |
@@ -223,11 +225,39 @@ Mitigaciones: Mensajes genéricos (“Credenciales inválidas”), no mostrar st
 | **Recuperación de contraseña**     | Solicitar restablecimiento.                                | Envío de enlace seguro con token temporal.          |
 | **Redirección por rol**            | Iniciar sesión con distintos roles (admin, usuario, etc.). | Accede a su área específica.                        |
 
+# 🧠 Pruebas de seguridad
+
+| Prueba                                   | Descripción                                         | Resultado esperado                            |
+| ---------------------------------------- | --------------------------------------------------- | --------------------------------------------- |
+| **Fuerza bruta / Credential stuffing**   | Intentar muchos logins desde misma IP/usuario.      | Sistema aplica rate-limit o bloqueo.          |
+| **Enumeración de usuarios**              | Probar emails o usuarios inexistentes.              | Mismo mensaje de error para todos.            |
+| **Session hijacking / fixation**         | Reutilizar cookie o ID de sesión después de logout. | La sesión ya no debe ser válida.              |
+| **CSRF (Cross-Site Request Forgery)**    | Enviar solicitud de login/logout desde otro sitio.  | Rechazada sin token CSRF válido.              |
+| **Cookie security flags**                | Revisar cookies del navegador.                      | Deben tener `HttpOnly`, `Secure`, `SameSite`. |
+| **JWT/token validation**                 | Modificar token o usar expirado.                    | Servidor debe rechazarlo.                     |
+| **Almacenamiento seguro de contraseñas** | Revisar hash en la BD.                              | Hash con `bcrypt`, `Argon2` o `PBKDF2`.       |
+| **Recuperación de contraseña segura**    | Intentar reutilizar token o interceptarlo.          | Token expira y no se reutiliza.               |
+| **MFA (si aplica)**                      | Verificar autenticación multifactor.                | Segundo factor requerido antes de acceso.     |
+
+# ⚙️ Pruebas de robustez y configuración
+
+| Prueba                                   | Descripción                                                | Resultado esperado                                                |
+| ---------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------- |
+| **Expiración de sesión**                 | Permanecer inactivo varios minutos.                        | Sesión expira automáticamente.                                    |
+| **Logout global**                        | Cerrar sesión desde otro dispositivo.                      | Se invalida en todos los dispositivos.                            |
+| **HTTPS forzado**                        | Intentar acceder por HTTP.                                 | Redirección automática a HTTPS.                                   |
+| **Protección contra XSS en formularios** | Ingresar scripts en los campos.                            | Se escapan caracteres y no se ejecuta código.                     |
+| **Cabeceras de seguridad**               | Revisar con `securityheaders.com` o Burp.                  | Deben existir: `Content-Security-Policy`, `X-Frame-Options`, etc. |
+| **Validación de entrada**                | Enviar datos malformados (correo sin @, contraseña corta). | Sistema valida y muestra mensajes adecuados.                      |
+| **Logs y alertas**                       | Revisar bitácoras de intentos fallidos y accesos.          | Se registran correctamente sin exponer datos sensibles.           |
+
+
 
 # reflexion personal
 Durante el desarrollo de esta investigación sobre fallos en sistemas de login y autenticación, me di cuenta de la enorme responsabilidad que implica diseñar e implementar mecanismos de seguridad en cualquier sistema informático. Al principio pensaba que los ataques a plataformas grandes como LinkedIn o Microsoft eran situaciones lejanas, pero al analizar cada caso comprendí que muchos de esos errores pudieron haberse evitado con prácticas básicas de protección de contraseñas y control de accesos.
 El caso de Fortinet me llamó especialmente la atención, porque muestra cómo un simple descuido en la validación de rutas administrativas puede abrir la puerta a atacantes con acceso total. En el caso de LinkedIn, me impactó saber que millones de contraseñas se filtraron solo por usar un algoritmo inseguro. Y el caso de Microsoft demuestra que incluso las empresas más grandes pueden tener vulnerabilidades si no actualizan sus sistemas de autenticación de manera constante.
 Esta investigación me ayudó a entender que la seguridad no depende solo de las herramientas, sino también de la forma en que se aplican y mantienen. Aprendí que siempre se deben realizar pruebas antes de lanzar un sistema, usar técnicas modernas de cifrado y reforzar la autenticación con métodos adicionales como el MFA. En conclusión, este trabajo me hizo más consciente de la importancia de desarrollar software seguro y de asumir la seguridad como una parte esencial del proceso, no como un paso final.
+
 
 
 
