@@ -1,4 +1,4 @@
-## 1. MATRIZ DE PATRONES (12 patrones únicos)
+## 1. MATRIZ DE PATRONES
 Tabla de patrones identificados
 #	Patrón Identificado	Equipo 1	Equipo 4	Equipo 6
 1	Reactivación de código legacy	✔	—	—
@@ -216,3 +216,4 @@ Me recuerda probar conversiones, límites y excepciones.
 Me obliga a nunca confiar ciegamente en código heredado.
 
 Refuerza la idea de que una pequeña omisión puede causar un fallo enorme.
+
